@@ -113,7 +113,6 @@ async def scrapeGame(game_id, semaphore, retries=3):
                 else:
                     return {'game_id': game_id, 'error': 'Failed after multiple retries'}
 
-
 async def scrapeGames(game_ids):
     semaphore = asyncio.Semaphore(10)
     tasks = [scrapeGame(game_id, semaphore) for game_id in game_ids]
@@ -134,23 +133,7 @@ def upload_to_s3(file_name, bucket, object_name=None):
     if object_name is None:
         object_name = file_name
     
-    s3_client = boto3.client('s3',
-                             aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
-    try:
-        response = s3_client.upload_file(file_name, bucket, object_name)
-    except Exception as e:
-        logger.error(f"Error uploading file to S3: {e}")
-        return False
-    return True
-
-def upload_to_s3(file_name, bucket, object_name=None):
-    if object_name is None:
-        object_name = file_name
-    
-    s3_client = boto3.client('s3',
-                             aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                             aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+    s3_client = boto3.client('s3')
     try:
         s3_client.upload_file(file_name, bucket, object_name)
         logger.info(f"Successfully uploaded {file_name} to {bucket}/{object_name}")
@@ -159,11 +142,11 @@ def upload_to_s3(file_name, bucket, object_name=None):
         logger.error(f"Error uploading file to S3: {e}")
         return False
 
-def update_json_file():
+def lambda_handler(event, context):
     game_ids = range(1, 10001)
     scraped_data = asyncio.run(scrapeGames(game_ids))
     sorted_jeopardy_games = sorted(scraped_data, key=sort_key, reverse=True)
-    file_name = 'jeopardy_games.json'
+    file_name = '/tmp/jeopardy_games.json'
     
     with open(file_name, 'w') as f:
         json.dump(sorted_jeopardy_games, f, indent=4)
@@ -174,10 +157,3 @@ def update_json_file():
         logger.info("Data successfully uploaded to S3")
     else:
         logger.error("Failed to upload data to S3")
-
-if __name__ == "__main__":
-    try:
-        update_json_file()
-        logger.info("Web scraper finished successfully")
-    except Exception as e:
-        logger.error(f"Web scraper encountered an error: {e}")
